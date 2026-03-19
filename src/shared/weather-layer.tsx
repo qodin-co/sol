@@ -1851,6 +1851,8 @@ function withAlpha(color: string, alpha: number): string {
 
 interface WeatherRendererColors {
   cloudColor?: string;
+  cloudShadow?: string;
+  cloudHi?: string;
   rainColor?: string;
   thunderColor?: string;
 }
@@ -1862,21 +1864,11 @@ function TideCloudRenderer({
   opacity,
 }: { w: number; h: number; colors: WeatherRendererColors; opacity: number }) {
   const id = useId().replace(/:/g, '');
-
-  const waveBand = (yBase: number, amp: number, phaseOff: number, pts = 80) => {
-    const top = Array.from({ length: pts }, (_, i) => {
-      const x = (i / (pts - 1)) * w;
-      const y = yBase - amp - amp * 0.5 * Math.sin((i / (pts - 1)) * Math.PI * 4 + phaseOff);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    const bottom = Array.from({ length: pts }, (_, i) => {
-      const ri = pts - 1 - i;
-      const x = (ri / (pts - 1)) * w;
-      const y = yBase + amp * 0.4 * Math.sin((ri / (pts - 1)) * Math.PI * 4 + phaseOff + 0.8);
-      return `L${x.toFixed(1)},${y.toFixed(1)}`;
-    });
-    return `${top.join(' ')} ${bottom.join(' ')} Z`;
-  };
+  const base = colors?.cloudColor ?? '#A8C8D8';
+  const shadow = colors?.cloudShadow ?? 'rgba(60,100,140,0.65)';
+  const hi = colors?.cloudHi ?? 'rgba(210,248,255,0.65)';
+  const cx = w / 2;
+  const baseY = h * 0.62;
 
   return (
     <svg
@@ -1884,39 +1876,120 @@ function TideCloudRenderer({
       width={w}
       height={h}
       viewBox={`0 0 ${w} ${h}`}
-      style={{ position: 'absolute', inset: 0 }}
+      fill="none"
+      overflow="visible"
+      style={{ display: 'block' }}
     >
-      <style>{`
-        @keyframes tide-cloud-drift-${id} {
-          from { transform: translateX(0px); }
-          to   { transform: translateX(-18px); }
-        }
-      `}</style>
       <defs>
-        <filter id={`tcf-${id}`} x="-20%" y="-40%" width="140%" height="180%">
+        <filter id={`tc-ds-${id}`} x="-30%" y="-20%" width="160%" height="180%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
+        <filter id={`tc-mb-${id}`} x="-20%" y="-30%" width="140%" height="160%">
           <feGaussianBlur stdDeviation="5" />
         </filter>
+        <filter id={`tc-pf-${id}`} x="-15%" y="-25%" width="130%" height="150%">
+          <feGaussianBlur stdDeviation="3.2" />
+        </filter>
+        <filter id={`tc-hi-${id}`} x="-10%" y="-15%" width="120%" height="130%">
+          <feGaussianBlur stdDeviation="1.4" />
+        </filter>
+        <filter id={`tc-us-${id}`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="5.5" />
+        </filter>
       </defs>
-      <g
-        style={{ animation: `tide-cloud-drift-${id} 14s ease-in-out infinite alternate` }}
-        filter={`url(#tcf-${id})`}
-      >
-        <path
-          d={waveBand(h * 0.25, h * 0.18, 0)}
-          fill={colors?.cloudColor ?? '#A8C8D8'}
-          opacity={opacity * 0.65}
-        />
-        <path
-          d={waveBand(h * 0.48, h * 0.14, Math.PI * 0.6)}
-          fill={colors?.cloudColor ?? '#90B8CC'}
-          opacity={opacity * 0.5}
-        />
-        <path
-          d={waveBand(h * 0.68, h * 0.1, Math.PI * 1.2)}
-          fill={colors?.cloudColor ?? '#B8D0E0'}
-          opacity={opacity * 0.4}
-        />
-      </g>
+
+      {/* Drop shadow — phase-tinted */}
+      <ellipse
+        cx={cx + w * 0.02}
+        cy={baseY + h * 0.14}
+        rx={w * 0.5}
+        ry={h * 0.09}
+        fill={shadow}
+        filter={`url(#tc-ds-${id})`}
+        opacity={opacity * 0.52}
+      />
+
+      {/* Wide flat maritime base */}
+      <ellipse
+        cx={cx}
+        cy={baseY}
+        rx={w * 0.52}
+        ry={h * 0.3}
+        fill={base}
+        filter={`url(#tc-mb-${id})`}
+        opacity={opacity * 0.88}
+      />
+
+      {/* Three puffs */}
+      <ellipse
+        cx={cx - w * 0.22}
+        cy={h * 0.36}
+        rx={w * 0.22}
+        ry={h * 0.24}
+        fill={base}
+        filter={`url(#tc-pf-${id})`}
+        opacity={opacity * 0.82}
+      />
+      <ellipse
+        cx={cx + w * 0.02}
+        cy={h * 0.24}
+        rx={w * 0.26}
+        ry={h * 0.3}
+        fill={base}
+        filter={`url(#tc-pf-${id})`}
+        opacity={opacity * 0.92}
+      />
+      <ellipse
+        cx={cx + w * 0.26}
+        cy={h * 0.38}
+        rx={w * 0.2}
+        ry={h * 0.22}
+        fill={base}
+        filter={`url(#tc-pf-${id})`}
+        opacity={opacity * 0.78}
+      />
+
+      {/* Blend layer */}
+      <ellipse
+        cx={cx}
+        cy={h * 0.46}
+        rx={w * 0.48}
+        ry={h * 0.26}
+        fill={base}
+        filter={`url(#tc-mb-${id})`}
+        opacity={opacity * 0.68}
+      />
+
+      {/* Phase-reactive highlight — warm at sunrise/sunset, cool blue at night */}
+      <ellipse
+        cx={cx - w * 0.04}
+        cy={h * 0.18}
+        rx={w * 0.16}
+        ry={h * 0.1}
+        fill={hi}
+        filter={`url(#tc-hi-${id})`}
+        opacity={opacity * 0.78}
+      />
+      <ellipse
+        cx={cx - w * 0.2}
+        cy={h * 0.28}
+        rx={w * 0.09}
+        ry={h * 0.06}
+        fill={hi}
+        filter={`url(#tc-hi-${id})`}
+        opacity={opacity * 0.52}
+      />
+
+      {/* Underside — phase-tinted ocean reflection */}
+      <ellipse
+        cx={cx}
+        cy={baseY + h * 0.06}
+        rx={w * 0.46}
+        ry={h * 0.09}
+        fill={shadow}
+        filter={`url(#tc-us-${id})`}
+        opacity={opacity * 0.45}
+      />
     </svg>
   );
 }
@@ -1924,44 +1997,58 @@ function TideCloudRenderer({
 function TideRainRenderer({
   w,
   h,
-  colors,
-  opacity,
-}: { w: number; h: number; colors: WeatherRendererColors; opacity: number }) {
-  const id = useId().replace(/:/g, '');
-  const drops = Array.from({ length: 28 }, (_, i) => ({
-    x: (i / 27) * w * 1.2 - w * 0.1,
-    delay: (i * 0.18) % 1.4,
-    len: 6 + (i % 4) * 3,
-  }));
+  rainColorFn,
+  angle,
+  category,
+}: {
+  w: number;
+  h: number;
+  rainColorFn: (a: number) => string;
+  angle: number;
+  category: WeatherCategory;
+}) {
+  // Sea rain — heavier drops, slight spray suggestion, more diagonal
+  const count = category === 'heavy-rain' ? 80 : category === 'rain' ? 48 : 22;
+  const baseLen = category === 'heavy-rain' ? 30 : category === 'rain' ? 20 : 10;
+  const seaAngle = category === 'heavy-rain' ? angle + 6 : angle + 3; // sea wind pushes harder
+  const r = seededRand(73);
+  const drops = Array.from({ length: count }, (_, i) => {
+    const layer = r() > 0.45;
+    const isSpray = r() > 0.85; // occasional short fat spray drop
+    return {
+      i,
+      x: r() * 112 - 6,
+      delay: -(r() * 1.8),
+      dur: isSpray ? 0.5 + r() * 0.3 : 0.28 + r() * 0.28,
+      alpha: layer ? 0.6 + r() * 0.32 : 0.2 + r() * 0.2,
+      len: isSpray ? baseLen * 0.3 : layer ? baseLen : baseLen * 0.55,
+      wid: isSpray ? 2.5 : layer ? 1.6 : 0.9,
+      spray: isSpray,
+    };
+  });
+
   return (
-    <svg
-      aria-hidden="true"
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      style={{ position: 'absolute', inset: 0 }}
-    >
-      <style>{`
-        @keyframes tide-rain-${id} {
-          from { transform: translateY(-${h}px) translateX(-4px); }
-          to   { transform: translateY(${h}px) translateX(4px); }
-        }
-      `}</style>
-      <g opacity={opacity}>
-        {drops.map((d, i) => (
-          <line
-            key={d.x}
-            x1={d.x}
-            y1={0}
-            x2={d.x + 4}
-            y2={d.len}
-            stroke={colors?.rainColor ?? '#A0C8E0'}
-            strokeWidth={0.8}
-            style={{ animation: `tide-rain-${id} 1.1s linear ${d.delay}s infinite` }}
-          />
-        ))}
-      </g>
-    </svg>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      {drops.map((d) => (
+        <div
+          key={d.i}
+          style={{
+            position: 'absolute',
+            left: `${d.x}%`,
+            top: 0,
+            width: `${d.wid}px`,
+            height: `${d.len}px`,
+            background: d.spray
+              ? rainColorFn(d.alpha * 0.7)
+              : `linear-gradient(to bottom, transparent 0%, ${rainColorFn(d.alpha)} 55%, ${rainColorFn(d.alpha * 0.4)} 100%)`,
+            borderRadius: d.spray ? '50%' : '0 0 3px 3px',
+            transform: `rotate(${seaAngle}deg)`,
+            transformOrigin: 'top center',
+            animation: `wRtide ${d.dur}s ${d.delay}s linear infinite`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -1972,62 +2059,132 @@ function SundialCloudRenderer({
   opacity,
 }: { w: number; h: number; colors: WeatherRendererColors; opacity: number }) {
   const id = useId().replace(/:/g, '');
-  const slabs = [
-    { x: w * 0.05, y: h * 0.08, rw: w * 0.55, rh: h * 0.32, rx: 3 },
-    { x: w * 0.38, y: h * 0.22, rw: w * 0.5, rh: h * 0.28, rx: 2 },
-    { x: w * 0.1, y: h * 0.44, rw: w * 0.42, rh: h * 0.22, rx: 2 },
-    { x: w * 0.55, y: h * 0.5, rw: w * 0.38, rh: h * 0.2, rx: 2 },
-  ];
+  const base = colors?.cloudColor ?? '#C8B898';
+  const shadow = colors?.cloudShadow ?? 'rgba(120,85,45,0.65)';
+  const hi = colors?.cloudHi ?? 'rgba(255,248,220,0.75)';
+  const cx = w / 2;
+  const baseY = h * 0.6;
+
   return (
     <svg
       aria-hidden="true"
       width={w}
       height={h}
       viewBox={`0 0 ${w} ${h}`}
-      style={{ position: 'absolute', inset: 0 }}
+      fill="none"
+      overflow="visible"
+      style={{ display: 'block' }}
     >
-      <style>{`
-        @keyframes sundial-slab-${id} {
-          from { transform: translateX(0px); }
-          to   { transform: translateX(-12px); }
-        }
-      `}</style>
       <defs>
-        <filter id={`scf-${id}`} x="-5%" y="-10%" width="110%" height="120%">
-          <feGaussianBlur stdDeviation="2.5" />
+        <filter id={`sd-ds-${id}`} x="-30%" y="-20%" width="160%" height="180%">
+          <feGaussianBlur stdDeviation="8" />
+        </filter>
+        <filter id={`sd-mb-${id}`} x="-20%" y="-30%" width="140%" height="160%">
+          <feGaussianBlur stdDeviation="4" />
+        </filter>
+        <filter id={`sd-pf-${id}`} x="-15%" y="-25%" width="130%" height="150%">
+          <feGaussianBlur stdDeviation="2.6" />
+        </filter>
+        <filter id={`sd-hi-${id}`} x="-10%" y="-15%" width="120%" height="130%">
+          <feGaussianBlur stdDeviation="1.2" />
+        </filter>
+        <filter id={`sd-us-${id}`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="4.5" />
         </filter>
       </defs>
-      <g
-        filter={`url(#scf-${id})`}
-        style={{ animation: `sundial-slab-${id} 22s ease-in-out infinite alternate` }}
-      >
-        {slabs.map((s, i) => (
-          <rect
-            key={s.x}
-            x={s.x}
-            y={s.y}
-            width={s.rw}
-            height={s.rh}
-            rx={s.rx}
-            fill={colors?.cloudColor ?? '#C8B898'}
-            stroke={colors?.cloudColor ?? '#B8A888'}
-            strokeWidth={0.5}
-            opacity={opacity * (0.7 - i * 0.1)}
-          />
-        ))}
-        {slabs.map((s) => (
-          <line
-            key={`l-${s.x}`}
-            x1={s.x + 6}
-            y1={s.y + s.rh * 0.35}
-            x2={s.x + s.rw - 6}
-            y2={s.y + s.rh * 0.35}
-            stroke={colors?.cloudColor ?? '#A09080'}
-            strokeWidth={0.4}
-            opacity={opacity * 0.3}
-          />
-        ))}
-      </g>
+
+      {/* Drop shadow — phase warm amber at day, cool slate at night */}
+      <ellipse
+        cx={cx + w * 0.02}
+        cy={baseY + h * 0.14}
+        rx={w * 0.46}
+        ry={h * 0.09}
+        fill={shadow}
+        filter={`url(#sd-ds-${id})`}
+        opacity={opacity * 0.48}
+      />
+
+      {/* Base body */}
+      <ellipse
+        cx={cx}
+        cy={baseY}
+        rx={w * 0.48}
+        ry={h * 0.3}
+        fill={base}
+        filter={`url(#sd-mb-${id})`}
+        opacity={opacity * 0.85}
+      />
+
+      {/* Three upright puffs — taller ry = more column-like */}
+      <ellipse
+        cx={cx - w * 0.24}
+        cy={h * 0.32}
+        rx={w * 0.18}
+        ry={h * 0.28}
+        fill={base}
+        filter={`url(#sd-pf-${id})`}
+        opacity={opacity * 0.8}
+      />
+      <ellipse
+        cx={cx + w * 0.01}
+        cy={h * 0.2}
+        rx={w * 0.22}
+        ry={h * 0.34}
+        fill={base}
+        filter={`url(#sd-pf-${id})`}
+        opacity={opacity * 0.9}
+      />
+      <ellipse
+        cx={cx + w * 0.26}
+        cy={h * 0.34}
+        rx={w * 0.17}
+        ry={h * 0.26}
+        fill={base}
+        filter={`url(#sd-pf-${id})`}
+        opacity={opacity * 0.76}
+      />
+
+      {/* Blend layer */}
+      <ellipse
+        cx={cx}
+        cy={h * 0.44}
+        rx={w * 0.44}
+        ry={h * 0.26}
+        fill={base}
+        filter={`url(#sd-mb-${id})`}
+        opacity={opacity * 0.65}
+      />
+
+      {/* Phase-reactive warm highlight — golden at noon, cool at dusk/dawn */}
+      <ellipse
+        cx={cx - w * 0.06}
+        cy={h * 0.14}
+        rx={w * 0.14}
+        ry={h * 0.09}
+        fill={hi}
+        filter={`url(#sd-hi-${id})`}
+        opacity={opacity * 0.82}
+      />
+      <ellipse
+        cx={cx - w * 0.22}
+        cy={h * 0.24}
+        rx={w * 0.08}
+        ry={h * 0.06}
+        fill={hi}
+        filter={`url(#sd-hi-${id})`}
+        opacity={opacity * 0.56}
+      />
+
+      {/* Underside — phase warm stone shadow */}
+      <ellipse
+        cx={cx}
+        cy={baseY + h * 0.06}
+        rx={w * 0.44}
+        ry={h * 0.09}
+        fill={shadow}
+        filter={`url(#sd-us-${id})`}
+        opacity={opacity * 0.42}
+      />
     </svg>
   );
 }
@@ -2035,44 +2192,59 @@ function SundialCloudRenderer({
 function SundialRainRenderer({
   w,
   h,
-  colors,
-  opacity,
-}: { w: number; h: number; colors: WeatherRendererColors; opacity: number }) {
-  const id = useId().replace(/:/g, '');
-  const streaks = Array.from({ length: 22 }, (_, i) => ({
-    x: (i / 21) * w * 1.1 - w * 0.05,
-    delay: (i * 0.22) % 1.6,
-    len: 8 + (i % 3) * 4,
-  }));
+  rainColorFn,
+  category,
+}: {
+  w: number;
+  h: number;
+  rainColorFn: (a: number) => string;
+  category: WeatherCategory;
+}) {
+  // Stone rain — water running down carved stone face
+  // Near-vertical, heavier streaks, some short wide smear drops
+  const count = category === 'heavy-rain' ? 52 : category === 'rain' ? 32 : 14;
+  const baseLen = category === 'heavy-rain' ? 28 : category === 'rain' ? 18 : 9;
+  const r = seededRand(89);
+  const drops = Array.from({ length: count }, (_, i) => {
+    const layer = r() > 0.5;
+    const isRunoff = r() > 0.75; // stone runoff — long thin streak
+    return {
+      i,
+      x: r() * 106 - 3,
+      delay: -(r() * 2.8), // stone rain is slower, more rhythmic
+      dur: isRunoff ? 1.2 + r() * 0.8 : 0.65 + r() * 0.5,
+      alpha: layer ? 0.52 + r() * 0.28 : 0.16 + r() * 0.18,
+      len: isRunoff ? baseLen * 2.2 : layer ? baseLen : baseLen * 0.6,
+      wid: isRunoff ? 0.8 : layer ? 1.2 : 0.65,
+      runoff: isRunoff,
+    };
+  });
+
   return (
-    <svg
-      aria-hidden="true"
-      width={w}
-      height={h}
-      viewBox={`0 0 ${w} ${h}`}
-      style={{ position: 'absolute', inset: 0 }}
-    >
-      <style>{`
-        @keyframes sundial-rain-${id} {
-          from { transform: translateY(-${h}px); }
-          to   { transform: translateY(${h * 1.5}px); }
-        }
-      `}</style>
-      <g opacity={opacity}>
-        {streaks.map((d) => (
-          <line
-            key={d.x}
-            x1={d.x}
-            y1={0}
-            x2={d.x}
-            y2={d.len}
-            stroke={colors?.rainColor ?? '#8090A0'}
-            strokeWidth={1.0}
-            style={{ animation: `sundial-rain-${id} 1.8s linear ${d.delay}s infinite` }}
-          />
-        ))}
-      </g>
-    </svg>
+    <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      {drops.map((d) => (
+        <div
+          key={d.i}
+          style={{
+            position: 'absolute',
+            left: `${d.x}%`,
+            top: 0,
+            width: `${d.wid}px`,
+            height: `${d.len}px`,
+            background: d.runoff
+              ? // Stone runoff — long gradient, like water channeling down carved grooves
+                `linear-gradient(to bottom, transparent 0%, ${rainColorFn(d.alpha * 0.4)} 15%, ${rainColorFn(d.alpha)} 50%, ${rainColorFn(d.alpha * 0.6)} 85%, transparent 100%)`
+              : `linear-gradient(to bottom, transparent 0%, ${rainColorFn(d.alpha)} 50%, transparent 100%)`,
+            borderRadius: d.runoff ? '0' : '50%',
+            filter: d.runoff ? 'none' : 'blur(0.3px)',
+            // Stone rain is nearly vertical — 1-2° at most
+            transform: 'rotate(1deg)',
+            transformOrigin: 'top center',
+            animation: `wRsundial ${d.dur}s ${d.delay}s linear infinite`,
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -2981,45 +3153,474 @@ export function WeatherLayer({
 
   // ── Per-skin tide/sundial/void cloud dispatch ──────────────────────────────
   if (skin === 'tide') {
+    const cloudCount = isHeavy ? 4 : isDark ? 3 : category === 'partly-cloudy' ? 2 : 3;
+    const cloudLayers = [
+      {
+        key: 'bg1',
+        top: '0%',
+        speed: 80,
+        delay: -20,
+        opac: isHeavy ? 0.96 : isDark ? 0.88 : 0.72,
+        wMul: 0.92,
+        hMul: 0.7,
+        kf: 'wCbg',
+      },
+      {
+        key: 'fg1',
+        top: '18%',
+        speed: 55,
+        delay: -8,
+        opac: isHeavy ? 0.84 : isDark ? 0.75 : 0.58,
+        wMul: 0.7,
+        hMul: 0.55,
+        kf: 'wCfg',
+      },
+      ...(cloudCount >= 3
+        ? [
+            {
+              key: 'bg2',
+              top: '4%',
+              speed: 68,
+              delay: -38,
+              opac: isHeavy ? 0.92 : isDark ? 0.8 : 0.52,
+              wMul: 1.05,
+              hMul: 0.72,
+              kf: 'wCbg',
+            },
+          ]
+        : []),
+      ...(cloudCount >= 4
+        ? [
+            {
+              key: 'fg2',
+              top: '22%',
+              speed: 44,
+              delay: -14,
+              opac: 0.88,
+              wMul: 0.62,
+              hMul: 0.5,
+              kf: 'wCfg',
+            },
+          ]
+        : []),
+    ];
+
+    const hasRain = category === 'rain' || category === 'heavy-rain' || category === 'drizzle';
+    const hasSnow = category === 'snow' || category === 'heavy-snow';
+    const snowCount = category === 'heavy-snow' ? 55 : 30;
+    const sr2 = seededRand(55);
+    const snowFlakes = Array.from({ length: snowCount }, (_, i) => {
+      const sz = 1.8 + sr2() * 3.0; // lighter, sea-spray-like
+      return {
+        i,
+        x: sr2() * 100,
+        sz,
+        dur: 6 + sr2() * 8,
+        delay: -(sr2() * 10),
+        drift: (sr2() - 0.5) * 60, // more horizontal drift — sea wind
+        alpha: 0.45 + sr2() * 0.45,
+        glow: sz > 3,
+      };
+    });
+
     return (
       <div
         ref={containerRef}
         aria-hidden
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity, zIndex: 4 }}
       >
-        <TideCloudRenderer w={dims.w} h={dims.h} colors={{ cloudColor: cloudBase }} opacity={1} />
-        {(category === 'rain' || category === 'heavy-rain' || category === 'drizzle') && (
+        <style>{`
+        @keyframes wCbg { from { transform: translateX(-200px); } to { transform: translateX(460px); } }
+        @keyframes wCfg { from { transform: translateX(-150px); } to { transform: translateX(420px); } }
+        @keyframes wRtide {
+          0%   { transform: translateY(-6%) rotate(13deg); opacity: 0; }
+          6%   { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(114%) rotate(13deg); opacity: 0; }
+        }
+        @keyframes wS {
+          0%   { transform: translateY(-4%) translateX(0) scale(1); opacity: 0; }
+          5%   { opacity: var(--a, 0.7); }
+          95%  { opacity: var(--a, 0.7); }
+          100% { transform: translateY(112%) translateX(var(--d, 0px)) scale(0.8); opacity: 0; }
+        }
+        @keyframes wFog  { 0%, 100% { opacity: 0.38; } 50% { opacity: 0.65; } }
+        @keyframes wFog2 { 0%, 100% { opacity: 0.22; } 50% { opacity: 0.48; } }
+        @keyframes tideFogRise {
+          0%   { transform: translateY(0px) scaleX(1.0); opacity: 0.28; }
+          50%  { transform: translateY(-8px) scaleX(1.04); opacity: 0.55; }
+          100% { transform: translateY(0px) scaleX(1.0); opacity: 0.28; }
+        }
+      `}</style>
+
+        {/* ── Maritime clouds ── */}
+        {category !== 'fog' &&
+          cloudLayers.map((cl) => (
+            <div
+              key={cl.key}
+              style={{
+                position: 'absolute',
+                top: cl.top,
+                left: 0,
+                opacity: cl.opac,
+                animation: `${cl.kf} ${cl.speed}s ${cl.delay}s linear infinite`,
+                willChange: 'transform',
+              }}
+            >
+              <TideCloudRenderer
+                w={Math.round(dims.w * cl.wMul)}
+                h={Math.round(dims.h * cl.hMul)}
+                colors={{ cloudColor: cloudBase, cloudShadow: cloudShadow, cloudHi: cloudHi }}
+                opacity={1}
+              />
+            </div>
+          ))}
+
+        {/* ── Sea rain ── */}
+        {hasRain && (
           <TideRainRenderer
             w={dims.w}
             h={dims.h}
-            colors={{ rainColor: rainColorFn(0.7) }}
-            opacity={1}
+            rainColorFn={rainColorFn}
+            angle={rainAngle}
+            category={category}
           />
+        )}
+
+        {/* ── Sea spray / snow — lighter particles, more horizontal drift ── */}
+        {hasSnow && (
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            {snowFlakes.map((f) => (
+              <div
+                key={f.i}
+                style={
+                  {
+                    position: 'absolute',
+                    left: `${f.x}%`,
+                    top: 0,
+                    width: f.sz,
+                    height: f.sz,
+                    borderRadius: '50%',
+                    background: snowFill,
+                    // Aqueous snow — soft glow like ice crystals over water
+                    boxShadow: f.glow ? `0 0 ${f.sz * 2}px rgba(210,240,255,0.8)` : 'none',
+                    opacity: 0,
+                    ['--d' as string]: `${f.drift}px`,
+                    ['--a' as string]: `${f.alpha}`,
+                    animation: `wS ${f.dur}s ${f.delay}s ease-in-out infinite`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ── Sea mist — rises from water surface (bottom up), not top down ── */}
+        {category === 'fog' && (
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            {/* Water surface fog — densest at bottom, dissipates upward */}
+            {[0, 1, 2, 3, 4].map((i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  // Fog rises from 90% upward — opposite of inland fog
+                  bottom: `${i * 16}%`,
+                  height: '30%',
+                  background: `linear-gradient(to top,
+                ${fogColorFn(0.32 - i * 0.05)} 0%,
+                ${fogColor2Fn(0.25 - i * 0.04)} 50%,
+                transparent 100%)`,
+                  filter: 'blur(7px)',
+                  animation: `${i % 2 === 0 ? 'tideFogRise' : 'wFog2'} ${14 + i * 4}s ${i * 2.5}s ease-in-out infinite`,
+                }}
+              />
+            ))}
+            {/* Mid-level wisps */}
+            {[0, 1].map((i) => (
+              <div
+                key={`w${i}`}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  top: `${30 + i * 20}%`,
+                  height: '22%',
+                  background: `linear-gradient(to right,
+                transparent 0%,
+                ${fogColorFn(0.14 + i * 0.04)} 30%,
+                ${fogColor2Fn(0.18 + i * 0.03)} 55%,
+                ${fogColorFn(0.14 + i * 0.04)} 78%,
+                transparent 100%)`,
+                  filter: 'blur(9px)',
+                  animation: `${i % 2 === 0 ? 'wFog' : 'wFog2'} ${22 + i * 7}s ${i * 4}s ease-in-out infinite`,
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ── Sea storm / bioluminescent thunder ── */}
+        {category === 'thunder' && (
+          <div style={{ position: 'absolute', inset: 0 }}>
+            {/* Use VoidThunderRenderer but with aqueous blue-teal color */}
+            <VoidThunderRenderer
+              w={dims.w}
+              h={dims.h}
+              colors={{ thunderColor: boltFill }}
+              opacity={0.72}
+            />
+          </div>
         )}
       </div>
     );
   }
 
   if (skin === 'sundial') {
+    const cloudCount = isHeavy ? 4 : isDark ? 3 : category === 'partly-cloudy' ? 2 : 3;
+    const cloudLayers = [
+      {
+        key: 'bg1',
+        top: '2%',
+        speed: 95,
+        delay: -28,
+        opac: isHeavy ? 0.94 : isDark ? 0.86 : 0.68,
+        wMul: 0.94,
+        hMul: 0.68,
+        kf: 'wCbg',
+      },
+      {
+        key: 'fg1',
+        top: '22%',
+        speed: 65,
+        delay: -12,
+        opac: isHeavy ? 0.82 : isDark ? 0.72 : 0.52,
+        wMul: 0.68,
+        hMul: 0.52,
+        kf: 'wCfg',
+      },
+      ...(cloudCount >= 3
+        ? [
+            {
+              key: 'bg2',
+              top: '6%',
+              speed: 78,
+              delay: -45,
+              opac: isHeavy ? 0.9 : isDark ? 0.78 : 0.48,
+              wMul: 1.06,
+              hMul: 0.75,
+              kf: 'wCbg',
+            },
+          ]
+        : []),
+      ...(cloudCount >= 4
+        ? [
+            {
+              key: 'fg2',
+              top: '26%',
+              speed: 50,
+              delay: -18,
+              opac: 0.85,
+              wMul: 0.6,
+              hMul: 0.48,
+              kf: 'wCfg',
+            },
+          ]
+        : []),
+    ];
+
+    const hasRain = category === 'rain' || category === 'heavy-rain' || category === 'drizzle';
+    const hasSnow = category === 'snow' || category === 'heavy-snow';
+    const snowCount = category === 'heavy-snow' ? 44 : 24;
+    const sr3 = seededRand(63);
+    const snowFlakes = Array.from({ length: snowCount }, (_, i) => {
+      // Stone snow — finer, like marble dust or ash
+      const sz = 1.2 + sr3() * 2.2;
+      return {
+        i,
+        x: sr3() * 100,
+        sz,
+        dur: 10 + sr3() * 13,
+        delay: -(sr3() * 15),
+        drift: (sr3() - 0.5) * 28, // less drift — stone surfaces are sheltered
+        alpha: 0.4 + sr3() * 0.42,
+      };
+    });
+
     return (
       <div
         ref={containerRef}
         aria-hidden
         style={{ position: 'absolute', inset: 0, pointerEvents: 'none', opacity, zIndex: 4 }}
       >
-        <SundialCloudRenderer
-          w={dims.w}
-          h={dims.h}
-          colors={{ cloudColor: cloudBase }}
-          opacity={1}
-        />
-        {(category === 'rain' || category === 'heavy-rain' || category === 'drizzle') && (
+        <style>{`
+        @keyframes wCbg { from { transform: translateX(-200px); } to { transform: translateX(460px); } }
+        @keyframes wCfg { from { transform: translateX(-150px); } to { transform: translateX(420px); } }
+        @keyframes wRsundial {
+          0%   { transform: translateY(-6%) rotate(1deg); opacity: 0; }
+          6%   { opacity: 1; }
+          90%  { opacity: 1; }
+          100% { transform: translateY(114%) rotate(1deg); opacity: 0; }
+        }
+        @keyframes wS {
+          0%   { transform: translateY(-4%) translateX(0) scale(1); opacity: 0; }
+          5%   { opacity: var(--a, 0.7); }
+          95%  { opacity: var(--a, 0.7); }
+          100% { transform: translateY(112%) translateX(var(--d, 0px)) scale(0.8); opacity: 0; }
+        }
+        @keyframes wFog  { 0%, 100% { opacity: 0.35; } 50% { opacity: 0.58; } }
+        @keyframes wFog2 { 0%, 100% { opacity: 0.20; } 50% { opacity: 0.42; } }
+        @keyframes stoneMist {
+          0%   { transform: translateX(0px) scaleY(1.0); opacity: 0.32; }
+          50%  { transform: translateX(12px) scaleY(1.06); opacity: 0.55; }
+          100% { transform: translateX(0px) scaleY(1.0); opacity: 0.32; }
+        }
+      `}</style>
+
+        {/* ── Stone strata clouds — move slower, more stately ── */}
+        {category !== 'fog' &&
+          cloudLayers.map((cl) => (
+            <div
+              key={cl.key}
+              style={{
+                position: 'absolute',
+                top: cl.top,
+                left: 0,
+                opacity: cl.opac,
+                animation: `${cl.kf} ${cl.speed}s ${cl.delay}s linear infinite`,
+                willChange: 'transform',
+              }}
+            >
+              <SundialCloudRenderer
+                w={Math.round(dims.w * cl.wMul)}
+                h={Math.round(dims.h * cl.hMul)}
+                colors={{ cloudColor: cloudBase, cloudShadow: cloudShadow, cloudHi: cloudHi }}
+                opacity={1}
+              />
+            </div>
+          ))}
+
+        {/* ── Stone rain — water down carved grooves ── */}
+        {hasRain && (
           <SundialRainRenderer
             w={dims.w}
             h={dims.h}
-            colors={{ rainColor: rainColorFn(0.6) }}
-            opacity={1}
+            rainColorFn={rainColorFn}
+            category={category}
           />
+        )}
+
+        {/* ── Marble dust / ash snow ── */}
+        {hasSnow && (
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            {snowFlakes.map((f) => (
+              <div
+                key={f.i}
+                style={
+                  {
+                    position: 'absolute',
+                    left: `${f.x}%`,
+                    top: 0,
+                    width: f.sz,
+                    height: f.sz,
+                    // Stone snow — hexagonal-ish, not perfectly round
+                    borderRadius: '35%',
+                    background: snowFill,
+                    filter: 'blur(0.3px)',
+                    opacity: 0,
+                    ['--d' as string]: `${f.drift}px`,
+                    ['--a' as string]: `${f.alpha}`,
+                    animation: `wS ${f.dur}s ${f.delay}s ease-in-out infinite`,
+                  } as React.CSSProperties
+                }
+              />
+            ))}
+          </div>
+        )}
+
+        {/* ── Morning mist over stone — mid-height horizontal bands ── */}
+        {category === 'fog' && (
+          <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+            {/* Primary mist bands — sit at mid-height like valley morning fog */}
+            {[0, 1, 2, 3].map((i) => (
+              <div
+                key={i}
+                style={{
+                  position: 'absolute',
+                  left: 0,
+                  right: 0,
+                  // Stone fog sits at 20-70% height — not top-down, not bottom-up
+                  top: `${18 + i * 14}%`,
+                  height: '26%',
+                  background: `linear-gradient(to right,
+                transparent 0%,
+                ${fogColorFn(0.22 + i * 0.04)} 22%,
+                ${fogColor2Fn(0.28 + i * 0.03)} 48%,
+                ${fogColorFn(0.22 + i * 0.04)} 74%,
+                transparent 100%)`,
+                  filter: 'blur(5px)',
+                  animation: `${i % 2 === 0 ? 'stoneMist' : 'wFog2'} ${22 + i * 7}s ${i * 4}s ease-in-out infinite`,
+                }}
+              />
+            ))}
+            {/* Stone base mist — slight warm tinge from sun on stone */}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: '30%',
+                background: `linear-gradient(to top,
+              ${fogColorFn(0.2)} 0%,
+              ${fogColor2Fn(0.14)} 55%,
+              transparent 100%)`,
+                filter: 'blur(6px)',
+                animation: 'wFog 18s ease-in-out infinite',
+              }}
+            />
+          </div>
+        )}
+
+        {/* ── Classical tempest — angular carved-lightning bolt ── */}
+        {category === 'thunder' && (
+          <div style={{ position: 'absolute', inset: 0 }}>
+            <VoidThunderRenderer
+              w={dims.w}
+              h={dims.h}
+              colors={{ thunderColor: boltFill }}
+              opacity={0.62}
+            />
+            {/* Additional classical bolt overlay — carved stone jagged shape */}
+            <svg
+              aria-hidden="true"
+              style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+              width={dims.w}
+              height={dims.h}
+              viewBox={`0 0 ${dims.w} ${dims.h}`}
+            >
+              <style>{`
+              @keyframes sundial-bolt {
+                0%, 54%, 70%, 100% { opacity: 0; }
+                56%, 68% { opacity: 0.55; }
+              }
+            `}</style>
+              {/* Angular Roman-style lightning — sharp geometric, like a carved symbol */}
+              <polyline
+                points={`${dims.w * 0.54},0 ${dims.w * 0.46},${dims.h * 0.38} ${dims.w * 0.54},${dims.h * 0.38} ${dims.w * 0.4},${dims.h}`}
+                fill="none"
+                stroke={boltFill}
+                strokeWidth={1.8}
+                strokeLinejoin="miter"
+                style={{
+                  animation: 'sundial-bolt 4.5s ease-in-out infinite',
+                  filter: `drop-shadow(0 0 4px ${boltFill})`,
+                }}
+              />
+            </svg>
+          </div>
         )}
       </div>
     );
